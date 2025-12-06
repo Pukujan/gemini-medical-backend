@@ -1,53 +1,42 @@
-// server.js
-import express from 'express';
-import cors from 'cors';
-import fetch from 'node-fetch';
-import 'dotenv/config';
-
-const app = express();
-const PORT = process.env.PORT || 4000;
-
-app.use(cors());          // allow requests from web & mobile
-app.use(express.json());  // parse JSON bodies
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const API_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent';
-
-if (!GEMINI_API_KEY) {
-  console.warn('⚠️ GEMINI_API_KEY is not set. Set it in your environment!');
-}
-
-app.post('/api/format-record', async (req, res) => {
+app.post('/api/sample-note', async (req, res) => {
   try {
-    const { rawInput } = req.body || {};
-    if (!rawInput || typeof rawInput !== 'string') {
-      return res.status(400).json({ error: 'rawInput is required' });
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY is not set on backend.' });
     }
 
     const systemPrompt =
-      "You are a professional medical record organizer. Your task is to extract key medical information from the provided unformatted text and structure it into a clean JSON object. If a field is not found, use 'N/A' for strings or an empty array [] for lists.";
+      'You generate realistic, messy, unstructured patient medical notes for testing. ' +
+      'Do NOT format anything as JSON or Markdown. Do NOT add explanations. ' +
+      'Output only the raw note text, as a single block of text, with line breaks, ' +
+      'shorthand, abbreviations, and inconsistent formatting like rushed clinician notes.';
 
-    const userQuery = `Organize the following unformatted patient healthcare record text:\n\n---\n\n${rawInput}`;
+    const userPrompt = `
+Make up a new patient encounter note with details like:
+
+- chief complaint
+- brief history
+- meds
+- allergies
+- physical exam
+- provider name
+- visit date 
+- assessment / plan
+
+But keep it VERY UNFORMATTED:
+- inconsistent spacing
+- weird punctuation
+- shorthand
+- partial sentences
+- messy line breaks
+
+Again: DO NOT wrap in code fences. DO NOT use Markdown headings. Just raw text.
+`;
 
     const payload = {
-      contents: [{ parts: [{ text: userQuery }] }],
+      contents: [{ parts: [{ text: userPrompt }] }],
       systemInstruction: { parts: [{ text: systemPrompt }] },
       generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: {
-            patientName: { type: 'STRING' },
-            dob: { type: 'STRING' },
-            diagnosis: { type: 'ARRAY', items: { type: 'STRING' } },
-            provider: { type: 'STRING' },
-            visitDate: { type: 'STRING' },
-            summary: { type: 'STRING' },
-            medications: { type: 'ARRAY', items: { type: 'STRING' } },
-          },
-          required: ['patientName', 'diagnosis', 'provider', 'summary'],
-        },
+        responseMimeType: 'text/plain',
       },
     };
 
@@ -59,10 +48,10 @@ app.post('/api/format-record', async (req, res) => {
 
     if (!geminiRes.ok) {
       const text = await geminiRes.text();
-      console.error('Gemini API error:', text);
+      console.error('Gemini sample API error:', text);
       return res
         .status(500)
-        .json({ error: `Gemini API error ${geminiRes.status}` });
+        .json({ error: `Gemini sample API error ${geminiRes.status}` });
     }
 
     const json = await geminiRes.json();
@@ -72,20 +61,13 @@ app.post('/api/format-record', async (req, res) => {
     if (!text) {
       return res
         .status(500)
-        .json({ error: 'Gemini returned empty or malformed response.' });
+        .json({ error: 'Gemini returned an empty sample note.' });
     }
 
-    const cleanJson = text.replace(/```json\n?|```/g, '').trim();
-    const structured = JSON.parse(cleanJson);
-
-    // ✅ Only return structured data, never the API key
-    res.json({ data: structured });
+    const clean = text.replace(/```[\s\S]*?```/g, '').trim();
+    res.json({ sample: clean });
   } catch (err) {
-    console.error('Proxy error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Sample note proxy error:', err);
+    res.status(500).json({ error: 'Internal server error (sample-note)' });
   }
-});
-
-app.listen(PORT, () => {
-  console.log(`✅ Gemini proxy listening on port ${PORT}`);
 });
