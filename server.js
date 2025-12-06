@@ -100,6 +100,7 @@ Make up a new patient encounter note with details like:
 - chief complaint
 - brief history
 - meds / allergies
+- pt name 
 - physical exam
 - provider name
 - visit date 
@@ -111,6 +112,8 @@ Keep it VERY messy:
 - shorthand
 - partial sentences
 - messy line breaks
+- everything in same line 
+- no paragraph or line breaks
 `;
 
     const payload = {
